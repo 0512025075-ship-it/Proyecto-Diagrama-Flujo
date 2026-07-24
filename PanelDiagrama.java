@@ -13,11 +13,7 @@ import java.awt.event.MouseMotionAdapter;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 
-/**
- * Panel donde el usuario dibuja el diagrama de flujo. El "modo" activo
- * determina qué hace un clic: agregar un nodo de cierto tipo, conectar
- * dos nodos existentes, o seleccionar/arrastrar un nodo.
- */
+
 public class PanelDiagrama extends JPanel {
 
     public enum Modo {
