@@ -1,0 +1,70 @@
+package diagramador;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class DiagramaModelo {
+
+    private final List<Nodo> nodos = new ArrayList<>();
+    private final List<Conexion> conexiones = new ArrayList<>();
+
+    public synchronized void agregarNodo(Nodo nodo) {
+        nodos.add(nodo);
+    }
+
+    public synchronized void agregarConexion(Conexion conexion) {
+        conexiones.add(conexion);
+    }
+
+    public synchronized List<Nodo> getNodos() {
+        return new ArrayList<>(nodos);
+    }
+
+    public synchronized List<Conexion> getConexiones() {
+        return new ArrayList<>(conexiones);
+    }
+
+      public synchronized Nodo buscarNodoEn(int x, int y) {
+        for (int i = nodos.size() - 1; i >= 0; i--) {
+            if (nodos.get(i).contienePunto(x, y)) {
+                return nodos.get(i);
+            }
+        }
+        return null;
+    }
+
+    public synchronized List<Conexion> getConexionesDesde(Nodo nodo) {
+        List<Conexion> resultado = new ArrayList<>();
+        for (Conexion c : conexiones) {
+            if (c.getOrigen() == nodo) {
+                resultado.add(c);
+            }
+        }
+        return resultado;
+    }
+
+    public synchronized Nodo buscarInicio() {
+        for (Nodo n : nodos) {
+            if (n.getTipo() == TipoNodo.INICIO) {
+                return n;
+            }
+        }
+        return null;
+    }
+
+    public synchronized void eliminarNodo(Nodo nodo) {
+        nodos.remove(nodo);
+        conexiones.removeIf(c -> c.getOrigen() == nodo || c.getDestino() == nodo);
+    }
+
+    public synchronized void limpiarResaltados() {
+        for (Nodo n : nodos) {
+            n.setResaltado(false);
+        }
+    }
+
+    public synchronized void limpiarTodo() {
+        nodos.clear();
+        conexiones.clear();
+    }
+}
