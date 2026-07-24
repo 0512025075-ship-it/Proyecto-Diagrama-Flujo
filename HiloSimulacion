@@ -1,0 +1,124 @@
+package diagramador;
+
+import java.util.List;
+import javax.swing.SwingUtilities;
+
+public class HiloSimulacion extends Thread {
+
+    public interface Escuchador {
+        void onPaso(Nodo actual);
+        void onFin(String mensaje);
+    }
+
+    private final DiagramaModelo modelo;
+    private final Escuchador escuchador;
+    private final int milisegundosPorPaso;
+
+    private volatile boolean pausado = false;
+    private volatile boolean detenido = false;
+
+    public HiloSimulacion(DiagramaModelo modelo, Escuchador escuchador, int milisegundosPorPaso) {
+        super("HiloSimulacion");
+        this.modelo = modelo;
+        this.escuchador = escuchador;
+        this.milisegundosPorPaso = milisegundosPorPaso;
+        setDaemon(true);
+    }
+
+    @Override
+    public void run() {
+        modelo.limpiarResaltados();
+
+        Nodo actual = modelo.buscarInicio();
+        if (actual == null) {
+            notificarFin("No se encontró un nodo de INICIO en el diagrama.");
+            return;
+        }
+
+        while (actual != null && !detenido) {
+            resaltarYNotificar(actual);
+
+            try {
+                esperarUnPaso();
+            } catch (InterruptedException e) {
+                // El hilo fue interrumpido (detener), salimos del ciclo.
+                Thread.currentThread().interrupt();
+                break;
+            }
+
+            if (detenido) {
+                break;
+            }
+
+            if (actual.getTipo() == TipoNodo.FIN) {
+                notificarFin("Simulación completa: se alcanzó el nodo FIN.");
+                return;
+            }
+
+            actual = siguienteNodo(actual);
+        }
+
+        if (detenido) {
+            notificarFin("Simulación detenida por el usuario.");
+        } else if (actual == null) {
+            notificarFin("Simulación terminada: el recorrido no tiene más conexiones salientes.");
+        }
+    }
+
+    private synchronized void esperarUnPaso() throws InterruptedException {
+        long restante = milisegundosPorPaso;
+        long ultimaMarca = System.currentTimeMillis();
+
+        while (restante > 0 && !detenido) {
+            while (pausado && !detenido) {
+                wait(); // libera el lock hasta que alguien llame notifyAll()
+            }
+            if (detenido) return;
+
+            wait(restante);
+
+            long ahora = System.currentTimeMillis();
+            restante -= (ahora - ultimaMarca);
+            ultimaMarca = ahora;
+        }
+    }
+
+    private Nodo siguienteNodo(Nodo actual) {
+        List<Conexion> salientes = modelo.getConexionesDesde(actual);
+        if (salientes.isEmpty()) {
+            return null;
+        }
+        return salientes.get(0).getDestino();
+    }
+
+    private void resaltarYNotificar(Nodo nodo) {
+        modelo.limpiarResaltados();
+        nodo.setResaltado(true);
+        SwingUtilities.invokeLater(() -> escuchador.onPaso(nodo));
+    }
+
+    private void notificarFin(String mensaje) {
+        modelo.limpiarResaltados();
+        SwingUtilities.invokeLater(() -> escuchador.onFin(mensaje));
+    }
+
+    public synchronized void pausar() {
+        pausado = true;
+    }
+
+    public synchronized void reanudar() {
+        pausado = false;
+        notifyAll();
+    }
+
+    public synchronized void detener() {
+        detenido = true;
+        pausado = false;
+        notifyAll();
+        this.interrupt();
+    }
+
+    public boolean isPausado() {
+        return pausado;
+    }
+}
