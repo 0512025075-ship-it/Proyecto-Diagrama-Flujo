@@ -1,9 +1,6 @@
 package diagramador;
 
-/**
- * Representa una conexión (flecha) dirigida entre dos nodos del diagrama.
- * La etiqueta se usa opcionalmente en nodos de tipo DECISION (ej. "Sí"/"No").
- */
+
 public class Conexion {
 
     private final Nodo origen;
