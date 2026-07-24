@@ -1,0 +1,124 @@
+package diagramador;
+
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JToggleButton;
+import javax.swing.ButtonGroup;
+import javax.swing.SwingUtilities;
+
+public class VentanaPrincipal extends JFrame implements HiloSimulacion.Escuchador {
+
+    private final DiagramaModelo modelo = new DiagramaModelo();
+    private final PanelDiagrama panel = new PanelDiagrama(modelo);
+    private final JLabel etiquetaEstado = new JLabel("Listo.");
+
+    private HiloSimulacion hiloSimulacion;
+    private JButton botonIniciar, botonPausar, botonDetener;
+
+    public VentanaPrincipal() {
+        super("Editor de Diagramas de Flujo");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+
+        add(construirBarraHerramientas(), BorderLayout.NORTH);
+        add(panel, BorderLayout.CENTER);
+        add(etiquetaEstado, BorderLayout.SOUTH);
+
+        setSize(950, 650);
+        setLocationRelativeTo(null);
+    }
+
+    private JPanel construirBarraHerramientas() {
+        JPanel barra = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        ButtonGroup grupo = new ButtonGroup();
+
+        barra.add(botonModo("Seleccionar/Mover", PanelDiagrama.Modo.SELECCIONAR, grupo, true));
+        barra.add(botonModo("+ Inicio", PanelDiagrama.Modo.AGREGAR_INICIO, grupo, false));
+        barra.add(botonModo("+ Proceso", PanelDiagrama.Modo.AGREGAR_PROCESO, grupo, false));
+        barra.add(botonModo("+ Decisión", PanelDiagrama.Modo.AGREGAR_DECISION, grupo, false));
+        barra.add(botonModo("+ Fin", PanelDiagrama.Modo.AGREGAR_FIN, grupo, false));
+        barra.add(botonModo("Conectar", PanelDiagrama.Modo.CONECTAR, grupo, false));
+        barra.add(botonModo("Eliminar", PanelDiagrama.Modo.ELIMINAR, grupo, false));
+
+        barra.add(new JLabel("   |   "));
+
+        botonIniciar = new JButton("▶ Ejecutar");
+        botonPausar = new JButton("⏸ Pausar");
+        botonDetener = new JButton("■ Detener");
+        botonPausar.setEnabled(false);
+        botonDetener.setEnabled(false);
+
+        botonIniciar.addActionListener(e -> iniciarSimulacion());
+        botonPausar.addActionListener(e -> alternarPausa());
+        botonDetener.addActionListener(e -> detenerSimulacion());
+
+        barra.add(botonIniciar);
+        barra.add(botonPausar);
+        barra.add(botonDetener);
+
+        return barra;
+    }
+
+    private JToggleButton botonModo(String texto, PanelDiagrama.Modo modo, ButtonGroup grupo, boolean seleccionado) {
+        JToggleButton boton = new JToggleButton(texto, seleccionado);
+        boton.addActionListener(e -> panel.setModo(modo));
+        grupo.add(boton);
+        return boton;
+    }
+
+    private void iniciarSimulacion() {
+        if (hiloSimulacion != null && hiloSimulacion.isAlive()) {
+            return;
+        }
+        hiloSimulacion = new HiloSimulacion(modelo, this, 800);
+        botonIniciar.setEnabled(false);
+        botonPausar.setEnabled(true);
+        botonPausar.setText("⏸ Pausar");
+        botonDetener.setEnabled(true);
+        etiquetaEstado.setText("Simulando...");
+        hiloSimulacion.start();
+    }
+
+    private void alternarPausa() {
+        if (hiloSimulacion == null) return;
+        if (hiloSimulacion.isPausado()) {
+            hiloSimulacion.reanudar();
+            botonPausar.setText("⏸ Pausar");
+            etiquetaEstado.setText("Simulando...");
+        } else {
+            hiloSimulacion.pausar();
+            botonPausar.setText("▶ Reanudar");
+            etiquetaEstado.setText("Pausado.");
+        }
+    }
+
+    private void detenerSimulacion() {
+        if (hiloSimulacion != null) {
+            hiloSimulacion.detener();
+        }
+    }
+
+    @Override
+    public void onPaso(Nodo actual) {
+        etiquetaEstado.setText("Ejecutando: " + actual.getTexto());
+        panel.repaint();
+    }
+
+    @Override
+    public void onFin(String mensaje) {
+        etiquetaEstado.setText(mensaje);
+        botonIniciar.setEnabled(true);
+        botonPausar.setEnabled(false);
+        botonDetener.setEnabled(false);
+        panel.repaint();
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new VentanaPrincipal().setVisible(true));
+    }
+}
