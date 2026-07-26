@@ -1,0 +1,124 @@
+package diagramador;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+
+public class GeneradorPseudocodigo {
+
+    private final DiagramaModelo modelo;
+    private final StringBuilder salida = new StringBuilder();
+
+    // Nodos que están siendo procesados en la rama actual de la recursión.
+    // Sirve para detectar bucles (flechas que vuelven hacia un nodo anterior)
+    // sin quedar en una recursión infinita.
+    private final Set<Nodo> enRamaActual = new HashSet<>();
+
+    public GeneradorPseudocodigo(DiagramaModelo modelo) {
+        this.modelo = modelo;
+    }
+
+    /** Genera y devuelve el pseudocódigo completo del diagrama actual. */
+    public String generar() {
+        salida.setLength(0);
+        enRamaActual.clear();
+
+        Nodo inicio = modelo.buscarInicio();
+        if (inicio == null) {
+            return "// No hay un nodo de INICIO en el diagrama.";
+        }
+
+        salida.append("INICIO\n");
+        enRamaActual.add(inicio);
+        avanzar(inicio, 1);
+        enRamaActual.remove(inicio);
+
+        return salida.toString();
+    }
+
+    /** Procesa un nodo (imprime su instrucción) y sigue con sus salidas. */
+    private void procesarNodo(Nodo nodo, int nivel) {
+        if (nodo == null) {
+            return;
+        }
+
+        if (nodo.getTipo() == TipoNodo.FIN) {
+            escribir(nivel, "FIN");
+            return;
+        }
+
+        if (enRamaActual.contains(nodo)) {
+            // Ya lo estamos procesando más arriba en esta misma rama: es un ciclo.
+            escribir(nivel, "VOLVER A: " + descripcionNodo(nodo));
+            return;
+        }
+
+        enRamaActual.add(nodo);
+
+        switch (nodo.getTipo()) {
+            case PROCESO -> {
+                escribir(nivel, descripcionNodo(nodo));
+                avanzar(nodo, nivel);
+            }
+            case DECISION -> procesarDecision(nodo, nivel);
+            default -> avanzar(nodo, nivel); // INICIO intermedio, si lo hubiera
+        }
+
+        enRamaActual.remove(nodo);
+    }
+
+    /** Genera un bloque SI / SINO a partir de las salidas de una DECISION. */
+    private void procesarDecision(Nodo decision, int nivel) {
+        List<Conexion> salientes = modelo.getConexionesDesde(decision);
+
+        if (salientes.isEmpty()) {
+            escribir(nivel, "SI " + descripcionNodo(decision) + " ... // (sin salidas conectadas)");
+            return;
+        }
+
+        if (salientes.size() == 1) {
+            // Decisión con una sola rama dibujada todavía: se trata como un paso simple.
+            escribir(nivel, "SI " + descripcionNodo(decision) + " ENTONCES");
+            procesarNodo(salientes.get(0).getDestino(), nivel + 1);
+            escribir(nivel, "FIN SI");
+            return;
+        }
+
+        Conexion primeraRama = salientes.get(0);
+        escribir(nivel, "SI " + descripcionNodo(decision) + etiquetaLegible(primeraRama) + " ENTONCES");
+        procesarNodo(primeraRama.getDestino(), nivel + 1);
+
+        for (int i = 1; i < salientes.size(); i++) {
+            Conexion rama = salientes.get(i);
+            escribir(nivel, "SINO" + etiquetaLegible(rama));
+            procesarNodo(rama.getDestino(), nivel + 1);
+        }
+
+        escribir(nivel, "FIN SI");
+    }
+
+    /** Sigue la primera conexión saliente de un nodo que no es DECISION. */
+    private void avanzar(Nodo nodo, int nivel) {
+        List<Conexion> salientes = modelo.getConexionesDesde(nodo);
+        if (salientes.isEmpty()) {
+            escribir(nivel, "// (sin conexión saliente: el diagrama queda incompleto aquí)");
+            return;
+        }
+        procesarNodo(salientes.get(0).getDestino(), nivel);
+    }
+
+    private String etiquetaLegible(Conexion c) {
+        String etq = c.getEtiqueta();
+        return (etq == null || etq.isBlank()) ? "" : " (" + etq + ")";
+    }
+
+    private String descripcionNodo(Nodo nodo) {
+        String texto = nodo.getTexto();
+        return (texto == null || texto.isBlank()) ? nodo.getTipo().name() : texto;
+    }
+
+    private void escribir(int nivel, String linea) {
+        salida.append("    ".repeat(Math.max(0, nivel))).append(linea).append("\n");
+    }
+}
