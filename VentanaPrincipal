@@ -1,21 +1,32 @@
 package diagramador;
 
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Font;
+import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
 import javax.swing.JToggleButton;
 import javax.swing.ButtonGroup;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 
 public class VentanaPrincipal extends JFrame implements HiloSimulacion.Escuchador {
 
     private final DiagramaModelo modelo = new DiagramaModelo();
     private final PanelDiagrama panel = new PanelDiagrama(modelo);
     private final JLabel etiquetaEstado = new JLabel("Listo.");
+
+    // Genera el pseudocódigo a partir del mismo modelo que dibuja el panel
+    // y que recorre el hilo de simulación.
+    private final GeneradorPseudocodigo generadorPseudocodigo = new GeneradorPseudocodigo(modelo);
+    private final JTextArea areaPseudocodigo = new JTextArea();
 
     private HiloSimulacion hiloSimulacion;
     private JButton botonIniciar, botonPausar, botonDetener;
@@ -27,10 +38,49 @@ public class VentanaPrincipal extends JFrame implements HiloSimulacion.Escuchado
 
         add(construirBarraHerramientas(), BorderLayout.NORTH);
         add(panel, BorderLayout.CENTER);
+        add(construirPanelPseudocodigo(), BorderLayout.EAST);
         add(etiquetaEstado, BorderLayout.SOUTH);
 
-        setSize(950, 650);
+        setSize(1250, 650);
         setLocationRelativeTo(null);
+
+        // El modelo se modifica desde el mouse dentro de PanelDiagrama, que
+        // no avisa cuando cambia. En vez de acoplar PanelDiagrama a este
+        // generador, se refresca el texto periódicamente: es barato de
+        // calcular y así el pseudocódigo queda al día mientras se dibuja.
+        Timer refrescoAutomatico = new Timer(700, e -> actualizarPseudocodigo());
+        refrescoAutomatico.start();
+
+        actualizarPseudocodigo();
+    }
+
+    private JPanel construirPanelPseudocodigo() {
+        JPanel contenedor = new JPanel(new BorderLayout());
+        contenedor.setPreferredSize(new Dimension(300, 0));
+        contenedor.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+
+        JLabel titulo = new JLabel("Pseudocódigo");
+        titulo.setBorder(BorderFactory.createEmptyBorder(2, 4, 4, 4));
+        contenedor.add(titulo, BorderLayout.NORTH);
+
+        areaPseudocodigo.setEditable(false);
+        areaPseudocodigo.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+        areaPseudocodigo.setTabSize(4);
+
+        JButton botonActualizar = new JButton("↻ Actualizar ahora");
+        botonActualizar.addActionListener(e -> actualizarPseudocodigo());
+
+        contenedor.add(new JScrollPane(areaPseudocodigo), BorderLayout.CENTER);
+        contenedor.add(botonActualizar, BorderLayout.SOUTH);
+        return contenedor;
+    }
+
+    /** Vuelve a generar el pseudocódigo a partir del estado actual del modelo. */
+    private void actualizarPseudocodigo() {
+        String nuevoTexto = generadorPseudocodigo.generar();
+        if (!nuevoTexto.equals(areaPseudocodigo.getText())) {
+            areaPseudocodigo.setText(nuevoTexto);
+        }
     }
 
     private JPanel construirBarraHerramientas() {
@@ -76,6 +126,7 @@ public class VentanaPrincipal extends JFrame implements HiloSimulacion.Escuchado
             return;
         }
         hiloSimulacion = new HiloSimulacion(modelo, this, 800);
+        actualizarPseudocodigo();
         botonIniciar.setEnabled(false);
         botonPausar.setEnabled(true);
         botonPausar.setText("⏸ Pausar");
@@ -102,6 +153,8 @@ public class VentanaPrincipal extends JFrame implements HiloSimulacion.Escuchado
             hiloSimulacion.detener();
         }
     }
+
+    // --- Callbacks del HiloSimulacion (siempre llamados en el EDT) ---
 
     @Override
     public void onPaso(Nodo actual) {
